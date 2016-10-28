@@ -229,7 +229,7 @@ static void *dump_thread(void *arg_)
 		readed = read(s->send_fd, buf, sizeof(buf));
 		if (readed < 0) {
 			ret = -errno;
-			error("failed to read stream from kernel: %s\n",
+			error("failed to read stream from kernel: %s",
 				strerror(-ret));
 			goto out;
 		}

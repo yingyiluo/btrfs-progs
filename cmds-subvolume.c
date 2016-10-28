@@ -940,10 +940,10 @@ static int cmd_subvol_show(int argc, char **argv)
 	}
 	if (ret) {
 		if (ret < 0) {
-			error("Failed to get subvol info %s: %s\n",
+			error("Failed to get subvol info %s: %s",
 					fullpath, strerror(-ret));
 		} else {
-			error("Failed to get subvol info %s: %d\n",
+			error("Failed to get subvol info %s: %d",
 					fullpath, ret);
 		}
 		return ret;
@@ -1251,7 +1251,7 @@ static int cmd_subvol_sync(int argc, char **argv)
 			}
 			if (id < BTRFS_FIRST_FREE_OBJECTID
 					|| id > BTRFS_LAST_FREE_OBJECTID) {
-				error("subvolume id %s out of range\n", arg);
+				error("subvolume id %s out of range", arg);
 				ret = 1;
 				goto out;
 			}
