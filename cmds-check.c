@@ -5166,8 +5166,7 @@ static int check_fs_roots_v2(struct btrfs_fs_info *fs_info)
 	int ret;
 	int err = 0;
 
-	ext_ref = btrfs_fs_incompat(fs_info,
-				    BTRFS_FEATURE_INCOMPAT_EXTENDED_IREF);
+	ext_ref = btrfs_fs_incompat(fs_info, EXTENDED_IREF);
 
 	path = btrfs_alloc_path();
 	if (!path)
@@ -7070,8 +7069,7 @@ static int check_space_cache(struct btrfs_root *root)
 			btrfs_remove_free_space_cache(cache);
 		}
 
-		if (btrfs_fs_compat_ro(root->fs_info,
-				       BTRFS_FEATURE_COMPAT_RO_FREE_SPACE_TREE)) {
+		if (btrfs_fs_compat_ro(root->fs_info, FREE_SPACE_TREE)) {
 			ret = exclude_super_stripes(root, cache);
 			if (ret) {
 				fprintf(stderr, "could not exclude super stripes: %s\n",
@@ -10066,8 +10064,7 @@ static int check_tree_block_ref(struct btrfs_root *root,
 
 	btrfs_init_path(&path);
 	key.objectid = bytenr;
-	if (btrfs_fs_incompat(root->fs_info,
-			      BTRFS_FEATURE_INCOMPAT_SKINNY_METADATA))
+	if (btrfs_fs_incompat(root->fs_info, SKINNY_METADATA))
 		key.type = BTRFS_METADATA_ITEM_KEY;
 	else
 		key.type = BTRFS_EXTENT_ITEM_KEY;
@@ -11849,7 +11846,7 @@ static int reinit_extent_tree(struct btrfs_trans_handle *trans,
 	 * the leaves of any fs roots and pin down the bytes for any file
 	 * extents we find.  Not hard but why do it if we don't have to?
 	 */
-	if (btrfs_fs_incompat(fs_info, BTRFS_FEATURE_INCOMPAT_MIXED_GROUPS)) {
+	if (btrfs_fs_incompat(fs_info, MIXED_GROUPS)) {
 		fprintf(stderr, "We don't support re-initing the extent tree "
 			"for mixed block groups yet, please notify a btrfs "
 			"developer you want to do this so they can add this "
@@ -12840,8 +12837,7 @@ int cmd_check(int argc, char **argv)
 	global_info = info;
 	root = info->fs_root;
 	if (clear_space_cache) {
-		if (btrfs_fs_compat_ro(info,
-				BTRFS_FEATURE_COMPAT_RO_FREE_SPACE_TREE)) {
+		if (btrfs_fs_compat_ro(info, FREE_SPACE_TREE)) {
 			error(
 			"free space cache v2 detected, clearing not implemented");
 			ret = 1;
@@ -12994,7 +12990,7 @@ int cmd_check(int argc, char **argv)
 	}
 
 	if (!ctx.progress_enabled) {
-		if (btrfs_fs_compat_ro(info, BTRFS_FEATURE_COMPAT_RO_FREE_SPACE_TREE))
+		if (btrfs_fs_compat_ro(info, FREE_SPACE_TREE))
 			fprintf(stderr, "checking free space tree\n");
 		else
 			fprintf(stderr, "checking free space cache\n");
@@ -13010,8 +13006,7 @@ int cmd_check(int argc, char **argv)
 	 * are no gaps in the file extents for inodes, otherwise we can just
 	 * ignore it when this happens.
 	 */
-	no_holes = btrfs_fs_incompat(root->fs_info,
-				     BTRFS_FEATURE_INCOMPAT_NO_HOLES);
+	no_holes = btrfs_fs_incompat(root->fs_info, NO_HOLES);
 	if (!ctx.progress_enabled)
 		fprintf(stderr, "checking fs roots\n");
 	if (check_mode == CHECK_MODE_LOWMEM)
