@@ -4880,6 +4880,62 @@ out:
 }
 
 /*
+ * Set dir isize to @isize
+ *
+ * Returns <0  means on error
+ * Returns  0  means successful repair
+ */
+static int repair_dir_isize_lowmem(struct btrfs_root *root,
+				   struct btrfs_path *path,
+				   u64 ino, u64 isize)
+{
+	struct btrfs_trans_handle *trans;
+	struct btrfs_inode_item *ii;
+	struct btrfs_key key;
+	struct btrfs_key research_key;
+	int ret;
+	int ret2;
+
+	key.objectid = ino;
+	key.type = BTRFS_INODE_ITEM_KEY;
+	key.offset = 0;
+
+	btrfs_item_key_to_cpu(path->nodes[0], &research_key, path->slots[0]);
+	btrfs_release_path(path);
+
+	trans = btrfs_start_transaction(root, 1);
+	if (IS_ERR(trans)) {
+		ret = PTR_ERR(trans);
+		goto out;
+	}
+
+	ret = btrfs_search_slot(trans, root, &key, path, 0, 1);
+	if (ret < 0)
+		goto out;
+	if (ret > 0) {
+		ret = -ENOENT;
+		goto out;
+	}
+
+	ii = btrfs_item_ptr(path->nodes[0], path->slots[0],
+			    struct btrfs_inode_item);
+	btrfs_set_inode_size(path->nodes[0], ii, isize);
+	btrfs_mark_buffer_dirty(path->nodes[0]);
+
+	printf("reset isize for inode %llu root %llu\n", ino,
+	       root->root_key.objectid);
+
+	btrfs_commit_transaction(trans, root);
+out:
+	if (ret < 0)
+		error("failed to reset isize for inode %llu root %llu due to %s",
+		      ino, root->root_key.objectid, strerror(-ret));
+	btrfs_release_path(path);
+	ret2 = btrfs_search_slot(NULL, root, &research_key, path, 0, 0);
+	return ret2 < 0 ? ret2 : ret;
+}
+
+/*
  * Check INODE_ITEM and related ITEMs (the same inode number)
  * 1. check link count
  * 2. check inode ref/extref
@@ -5015,9 +5071,16 @@ out:
 		}
 
 		if (isize != size) {
-			err |= ISIZE_ERROR;
-			error("root %llu DIR INODE [%llu] size(%llu) not equal to %llu",
-			      root->objectid, inode_id, isize, size);
+			if (repair)
+				ret = repair_dir_isize_lowmem(root, path,
+							      inode_id,
+							      size);
+
+			if (!repair || ret) {
+				err |= ISIZE_ERROR;
+				error("root %llu DIR INODE [%llu] size(%llu) not equal to %llu",
+				      root->objectid, inode_id, isize, size);
+			}
 		}
 	} else {
 		if (nlink != refs) {
