@@ -4445,6 +4445,8 @@ out:
 	return ret;
 }
 
+static int research_path(struct btrfs_root *root, struct btrfs_path *path,
+			 struct btrfs_key *key);
 /*
  * Traverse the given INODE_REF and call find_dir_item() to find related
  * DIR_ITEM/DIR_INDEX.If repair is enable, research @ref_key and
@@ -4475,26 +4477,39 @@ static int check_inode_ref(struct btrfs_root *root, struct btrfs_key *ref_key,
 	u32 cur = 0;
 	long len;
 	u64 index;
-	int err = 0;
+	int ret, err = 0;
 	int tmp_err;
 	int slot;
+	int need_research = 0;
 
+research:
+	if (need_research) {
+		ret = research_path(root, path, ref_key);
+		need_research = 1;
+		if (ret)
+			return ret > 0 ? 0 : ret;
+	}
+
+	err = 0;
+	cur = 0;
+	*refs = 0;
 	location.objectid = ref_key->objectid;
 	location.type = BTRFS_INODE_ITEM_KEY;
 	location.offset = 0;
 	node = path->nodes[0];
 	slot = path->slots[0];
 
+	memset(namebuf, 0, sizeof(namebuf) / sizeof(*namebuf));
 	ref = btrfs_item_ptr(node, slot, struct btrfs_inode_ref);
 	total = btrfs_item_size_nr(node, slot);
 
 next:
 	/* Update inode ref count */
 	(*refs)++;
-
 	tmp_err = 0;
 	index = btrfs_inode_ref_index(node, ref);
 	name_len = btrfs_inode_ref_name_len(node, ref);
+
 	if (name_len <= BTRFS_NAME_LEN) {
 		len = name_len;
 	} else {
@@ -4536,6 +4551,16 @@ next:
 	tmp_err |= find_dir_item(root, &key, &location, namebuf, len,
 			    imode_to_type(mode));
 end:
+	if (tmp_err && repair) {
+		ret = repair_ternary_lowmem(root, ref_key->offset,
+					    ref_key->objectid, index, namebuf,
+					    name_len, imode_to_type(mode),
+					    tmp_err);
+		if (!ret) {
+			need_research = true;
+			goto research;
+		}
+	}
 	print_inode_ref_err(root, ref_key, index, namebuf, name_len,
 			    imode_to_type(mode), tmp_err);
 	err |= tmp_err;
