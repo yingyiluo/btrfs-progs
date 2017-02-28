@@ -4388,6 +4388,63 @@ static void print_inode_ref_err(struct btrfs_root *root, struct btrfs_key *key,
 		       namebuf, filetype);
 }
 
+static int repair_inode_item_missing(struct btrfs_root *root, u64 ino,
+				     u8 filetype, int err);
+/*
+ * The ternary contains dir item, dir index and relative inode ref.
+ * the repair function will handle errs: INODE_MISSING, DIR_INDEX_MISSING
+ * DIR_INDEX_MISMATCH, DIR_ITEM_MISSING, DIR_ITEM_MISMATCH by the follow
+ * strategy:
+ * If two of three is missing or mismatched, delete the existed one.
+ * If one of three is missing or mismatched, add the missing one.
+ *
+ * returns 0 mens success.
+ */
+int repair_ternary_lowmem(struct btrfs_root *root, u64 dir_ino, u64 ino,
+			  u64 index, char *name, int name_len, u8 filetype,
+			  int err)
+{
+	struct btrfs_trans_handle *trans;
+	int stage = 0;
+	int ret;
+
+	if (!err)
+		return 0;
+	/*
+	 * stage shall be one of follow valild values:
+	 *	0: Fine, nothing to do.
+	 *	1: One of three is wrong, so add missing one.
+	 *	2: Two of three is wrong, so delete existed one.
+	 */
+	if (err & (DIR_INDEX_MISMATCH | DIR_INDEX_MISSING))
+		++stage;
+	if (err & (DIR_ITEM_MISMATCH | DIR_ITEM_MISSING))
+		++stage;
+	if (err & (INODE_REF_MISSING))
+		++stage;
+
+	/* stage must be smllarer than 3 */
+	ASSERT(stage < 3);
+
+	trans = btrfs_start_transaction(root, 2);
+	if (stage == 2) {
+		ret = btrfs_unlink(trans, root, ino, dir_ino, index, name,
+				   name_len, 0);
+		if (ret)
+			goto out;
+	}
+	if (stage == 1) {
+		ret = btrfs_add_link(trans, root, ino, dir_ino, name, name_len,
+			       filetype, &index, 1, 1);
+		if (ret)
+			goto out;
+	}
+
+	btrfs_commit_transaction(trans, root);
+out:
+	return ret;
+}
+
 /*
  * Traverse the given INODE_REF and call find_dir_item() to find related
  * DIR_ITEM/DIR_INDEX.If repair is enable, research @ref_key and
